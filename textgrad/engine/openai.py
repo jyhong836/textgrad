@@ -33,7 +33,7 @@ class ChatOpenAI(EngineLM, CachedEngine):
         system_prompt: str=DEFAULT_SYSTEM_PROMPT,
         is_multimodal: bool=False,
         base_url: str=None,
-        **kwargs):
+        **gen_kwargs):
         """
         :param model_string:
         :param system_prompt:
@@ -64,6 +64,8 @@ class ChatOpenAI(EngineLM, CachedEngine):
 
         self.model_string = model_string
         self.is_multimodal = is_multimodal
+        
+        self.gen_kwargs = gen_kwargs
 
     @retry(wait=wait_random_exponential(min=1, max=5), stop=stop_after_attempt(5))
     def generate(self, content: Union[str, List[Union[str, bytes]]], system_prompt: str=None, **kwargs):
@@ -84,7 +86,7 @@ class ChatOpenAI(EngineLM, CachedEngine):
         sys_prompt_arg = system_prompt if system_prompt else self.system_prompt
 
         cache_or_none = self._check_cache(sys_prompt_arg + prompt)
-        if cache_or_none is not None:
+        if temperature == 0 and cache_or_none is not None:
             return cache_or_none
 
         response = self.client.chat.completions.create(
@@ -106,7 +108,9 @@ class ChatOpenAI(EngineLM, CachedEngine):
         return response
 
     def __call__(self, prompt, **kwargs):
-        return self.generate(prompt, **kwargs)
+        _kwargs = self.gen_kwargs.copy()
+        _kwargs.update(kwargs)
+        return self.generate(prompt, **_kwargs)
 
     def _format_content(self, content: List[Union[str, bytes]]) -> List[dict]:
         """Helper function to format a list of strings and bytes into a list of dictionaries to pass as messages to the API.
@@ -140,7 +144,7 @@ class ChatOpenAI(EngineLM, CachedEngine):
 
         cache_key = sys_prompt_arg + json.dumps(formatted_content)
         cache_or_none = self._check_cache(cache_key)
-        if cache_or_none is not None:
+        if temperature == 0 and cache_or_none is not None:
             return cache_or_none
 
         response = self.client.chat.completions.create(
